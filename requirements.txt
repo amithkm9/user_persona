@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+openai
+mistralai
+langchain
+langchain-core
+langchain-neo4j
+langchain-groq
+neo4j
