@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from cv_extract import extract_cv_to_markdown
 from neo4j_integration import upload_persona_to_neo4j
 import openai
+from config import MISTRAL_API_KEY, OPENAI_API_KEY
 
 app = FastAPI(title="CV Persona Builder")
 
@@ -11,8 +12,8 @@ app = FastAPI(title="CV Persona Builder")
 class PersonaRequest(BaseModel):
     document_url: str
     answers: dict
-    openai_api_key: str = ""
-    mistral_api_key: str = "KkDJpOtCRYJjq514rwKUjJlxPN9idCSN"
+    openai_api_key: str = None
+    mistral_api_key: str = None
 
 class PersonaResponse(BaseModel):
     persona: str
@@ -83,9 +84,20 @@ def generate_prompt(cv_content: str, answers: dict) -> str:
 @app.post("/generate_persona", response_model=PersonaResponse)
 async def generate_persona(request: PersonaRequest):
     try:
+        # Use API keys from request or environment variables
+        mistral_key = request.mistral_api_key or MISTRAL_API_KEY
+        openai_key = request.openai_api_key or OPENAI_API_KEY
+        
+        # Validate API keys
+        if not mistral_key:
+            raise HTTPException(status_code=400, detail="Mistral API key is required")
+        
+        if not openai_key:
+            raise HTTPException(status_code=400, detail="OpenAI API key is required")
+        
         # Extract CV Content
         try:
-            cv_content = extract_cv_to_markdown(request.document_url, request.mistral_api_key)
+            cv_content = extract_cv_to_markdown(request.document_url, mistral_key)
             print("CV extraction successful")
         except Exception as e:
             print(f"CV extraction failed: {str(e)}")
@@ -95,13 +107,9 @@ async def generate_persona(request: PersonaRequest):
         prompt = generate_prompt(cv_content, request.answers)
         print("Prompt generated successfully")
 
-        if not request.openai_api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key is required.")
-
         # OpenAI call
         try:
-            import openai
-            openai.api_key = request.openai_api_key
+            openai.api_key = openai_key
             
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",

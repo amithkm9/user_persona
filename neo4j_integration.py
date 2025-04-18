@@ -3,17 +3,36 @@ import json
 from langchain_neo4j import Neo4jGraph
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
+from config import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, GROQ_API_KEY, GROQ_MODEL_NAME
 
-NEO4J_URI = "neo4j+s://e78401af.databases.neo4j.io"
-NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "uP2wXbd9Aa2a6WxbpgT_3DuZZscQ4yn52nGYrmJjseU"
-GROQ_API_KEY = "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"
-MODEL_NAME = "llama-3.3-70b-versatile"
+def get_neo4j_graph():
+    """Create and return a Neo4jGraph instance using environment variables"""
+    if not all([NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD]):
+        raise ValueError("Neo4j credentials not found in environment variables")
+    
+    return Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
 
-graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
-llm = ChatGroq(groq_api_key=GROQ_API_KEY, model_name=MODEL_NAME)
+def get_groq_llm():
+    """Create and return a ChatGroq instance using environment variables"""
+    if not GROQ_API_KEY:
+        raise ValueError("Groq API key not found in environment variables")
+    
+    return ChatGroq(groq_api_key=GROQ_API_KEY, model_name=GROQ_MODEL_NAME)
 
 def upload_persona_to_neo4j(persona_text: str) -> dict:
+    """
+    Uploads a persona to Neo4j by converting it to a knowledge graph.
+    
+    Args:
+        persona_text (str): The persona text to upload.
+        
+    Returns:
+        dict: A dictionary with information about the upload.
+    """
+    # Get graph and LLM instances
+    graph = get_neo4j_graph()
+    llm = get_groq_llm()
+    
     prompt_template = """
     I need you to create a knowledge graph from the following persona data:
 
@@ -73,9 +92,11 @@ def upload_persona_to_neo4j(persona_text: str) -> dict:
         raise ValueError("No 'nodes' found in graph data")
     if "relationships" not in graph_data:
         raise ValueError("No 'relationships' found in graph data")
+    
     nodes_created = 0
     nodes_reused = 0
     relationships_created = 0
+    
     # Process nodes - For non-Person nodes, MERGE on name to prevent duplicates
     for node in graph_data["nodes"]:
         if "id" not in node or "type" not in node:
@@ -174,7 +195,7 @@ def upload_persona_to_neo4j(persona_text: str) -> dict:
 
     return {
         "message": "Graph uploaded successfully",
-        "nodes_created": nodes_created,  # This was missing
+        "nodes_created": nodes_created,
         "nodes_reused": nodes_reused,
         "relationships_created": relationships_created,
         "total_nodes_in_db": node_count,
